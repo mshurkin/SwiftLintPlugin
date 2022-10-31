@@ -26,14 +26,14 @@ targets: [
         name: "YOUR_TARGET",
         dependencies: [],
         plugins: [
-            .plugin(name: "SwiftLintPlugin", package: "SwiftLintPlugin")
+            .plugin(name: "SwiftLintBuildPlugin", package: "SwiftLintPlugin")
         ]
     ),
 ```
 
 ## Add to Project
 
-Add this package to your project dependencies. Select a target and open the `Build Phases` inspector. Open `Run Build Tool Plug-ins` and add `SwiftLintPlugin` from the list.
+Add this package to your project dependencies. Select a target and open the `Build Phases` inspector. Open `Run Build Tool Plug-ins` and add `SwiftLintBuildPlugin` from the list.
 
 ## SwiftGen config
 

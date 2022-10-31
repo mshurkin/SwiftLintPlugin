@@ -6,17 +6,17 @@ import PackageDescription
 let package = Package(
     name: "SwiftLintPlugin",
     products: [
-        .plugin(name: "SwiftLint", targets: ["SwiftLint"]),
+        .plugin(name: "SwiftLintBuildPlugin", targets: ["SwiftLintBuildPlugin"]),
         .plugin(name: "SwiftLintPlugin", targets: ["SwiftLintPlugin"])
     ],
     targets: [
         .plugin(
-            name: "SwiftLintPlugin",
+            name: "SwiftLintBuildPlugin",
             capability: .buildTool(),
             dependencies: ["SwiftLintBinary"]
         ),
         .plugin(
-            name: "SwiftLint",
+            name: "SwiftLintPlugin",
             capability: .command(intent: .custom(verb: "swiftlint", description: "SwiftLint")),
             dependencies: ["SwiftLintBinary"]
         ),
