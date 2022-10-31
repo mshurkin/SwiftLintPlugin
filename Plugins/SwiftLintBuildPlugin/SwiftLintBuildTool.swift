@@ -38,13 +38,13 @@ struct SwiftLintBuildTool: BuildToolPlugin {
             return []
         }
 
-        let inputFiles = target.sourceFiles(withSuffix: "swift").map(\.path)
+        let inputFiles = target.sourceFiles(withSuffix: "swift").map(\.path.string)
         if inputFiles.isEmpty {
             return []
         }
 
         return [
-            .buildCommand(
+            .prebuildCommand(
                 displayName: "Run SwiftLint",
                 executable: try context.tool(named: "swiftlint").path,
                 arguments: [
@@ -53,7 +53,8 @@ struct SwiftLintBuildTool: BuildToolPlugin {
                     "--config", "\(configuration.string)",
                     "--use-script-input-files"
                 ],
-                inputFiles: inputFiles
+                environment: environment(files: inputFiles),
+                outputFilesDirectory: context.pluginWorkDirectory
             )
         ]
     }
@@ -64,6 +65,15 @@ private extension SwiftLintBuildTool {
         [target, project]
             .compactMap { $0?.appending("swiftlint.yml") }
             .first { FileManager.default.fileExists(atPath: $0.string) }
+    }
+
+    func environment(files: [String]) -> [String: String] {
+        var environment: [String: String] = [:]
+        environment["SCRIPT_INPUT_FILE_COUNT"] = String(files.count)
+        files.enumerated().forEach { (index, file) in
+            environment["SCRIPT_INPUT_FILE_\(index)"] = file
+        }
+        return environment
     }
 }
 
@@ -77,13 +87,13 @@ extension SwiftLintBuildTool: XcodeBuildToolPlugin {
             return []
         }
 
-        let inputFiles = context.xcodeProject.filePaths.filter { $0.extension == "swift" }
+        let inputFiles = context.xcodeProject.filePaths.filter({ $0.extension == "swift" }).map(\.string)
         if inputFiles.isEmpty {
             return []
         }
 
         return [
-            .buildCommand(
+            .prebuildCommand(
                 displayName: "Run SwiftLint",
                 executable: try context.tool(named: "swiftlint").path,
                 arguments: [
@@ -92,7 +102,8 @@ extension SwiftLintBuildTool: XcodeBuildToolPlugin {
                     "--config", "\(configuration.string)",
                     "--use-script-input-files"
                 ],
-                inputFiles: inputFiles
+                environment: environment(files: inputFiles),
+                outputFilesDirectory: context.pluginWorkDirectory
             )
         ]
     }
