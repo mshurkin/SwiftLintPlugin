@@ -1,7 +1,6 @@
 //
 //  SwiftLintBuildTool.swift
 //
-//  Created by Максим Шуркин on 27.10.2022.
 //  Copyright © 2022 Maxim Shurkin
 //
 //  Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -38,14 +37,12 @@ struct SwiftLintBuildTool: BuildToolPlugin {
             return []
         }
 
+        let packageFile = context.package.directory.appending("Package.swift").string
         let inputFiles = target.sourceFiles(withSuffix: "swift").map(\.path.string)
-        if inputFiles.isEmpty {
-            return []
-        }
 
         return [
             .prebuildCommand(
-                displayName: "Run SwiftLint",
+                displayName: "Run SwiftLint for \(target.name)",
                 executable: try context.tool(named: "swiftlint").path,
                 arguments: [
                     "lint",
@@ -53,7 +50,7 @@ struct SwiftLintBuildTool: BuildToolPlugin {
                     "--config", "\(configuration.string)",
                     "--use-script-input-files"
                 ],
-                environment: environment(files: inputFiles),
+                environment: environment(files: [packageFile] + inputFiles),
                 outputFilesDirectory: context.pluginWorkDirectory
             )
         ]
@@ -94,7 +91,7 @@ extension SwiftLintBuildTool: XcodeBuildToolPlugin {
 
         return [
             .prebuildCommand(
-                displayName: "Run SwiftLint",
+                displayName: "Run SwiftLint for \(target.displayName)",
                 executable: try context.tool(named: "swiftlint").path,
                 arguments: [
                     "lint",

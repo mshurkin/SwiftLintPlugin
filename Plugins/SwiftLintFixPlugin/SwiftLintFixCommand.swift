@@ -1,5 +1,5 @@
 //
-//  SwiftLintCommand.swift
+//  SwiftLintFixCommand.swift
 //
 //  Copyright © 2022 Maxim Shurkin
 //
@@ -26,7 +26,7 @@ import Foundation
 import PackagePlugin
 
 @main
-struct SwiftLintCommand: CommandPlugin {
+struct SwiftLintFixCommand: CommandPlugin {
     func performCommand(context: PluginContext, arguments: [String]) async throws {
         let (targets, arguments) = parse(
             arguments: arguments,
@@ -59,7 +59,7 @@ struct SwiftLintCommand: CommandPlugin {
     }
 }
 
-private extension SwiftLintCommand {
+private extension SwiftLintFixCommand {
     func parse(
         arguments: [String],
         targets allTargets: @autoclosure () -> [String],
@@ -73,7 +73,7 @@ private extension SwiftLintCommand {
             targets = allTargets()
         }
         if arguments.isEmpty {
-            arguments = ["lint", "--cache-path", "\(cache)"]
+            arguments = ["--fix", "--cache-path", "\(cache)"]
         }
 
         return (targets, arguments)
@@ -112,44 +112,15 @@ private extension SwiftLintCommand {
         process.arguments = arguments
         process.environment = environment
 
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-
         try process.run()
         process.waitUntilExit()
-
-        guard
-            let outputData = try pipe.fileHandleForReading.readToEnd(),
-            let output = String(data: outputData, encoding: .utf8)
-        else {
-            return
-        }
-
-        for line in output.split(separator: "\n").map(String.init) {
-            let components = line.split(separator: ":", maxSplits: 4).map(String.init)
-            if components.count == 5 {
-                let severity = components[3].trimmingCharacters(in: .whitespaces)
-                switch severity {
-                case "warning":
-                    Diagnostics.warning(line, file: components[0], line: Int(components[1]))
-                    continue
-                case "error":
-                    Diagnostics.error(line, file: components[0], line: Int(components[1]))
-                    continue
-                default:
-                    break
-                }
-            }
-            Diagnostics.remark(line)
-        }
     }
 }
 
 #if canImport(XcodeProjectPlugin)
 import XcodeProjectPlugin
 
-extension SwiftLintCommand: XcodeCommandPlugin {
+extension SwiftLintFixCommand: XcodeCommandPlugin {
     func performCommand(context: XcodePluginContext, arguments: [String]) throws {
         let (targets, arguments) = parse(
             arguments: arguments,
@@ -175,3 +146,4 @@ extension SwiftLintCommand: XcodeCommandPlugin {
     }
 }
 #endif
+
