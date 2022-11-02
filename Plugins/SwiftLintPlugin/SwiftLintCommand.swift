@@ -33,38 +33,35 @@ struct SwiftLintCommand: CommandPlugin {
             targets: context.package.targets.map(\.name),
             cache: context.pluginWorkDirectory
         )
-        let swiftlint = try context.tool(named: "swiftlint").path
+        let swiftlint = try context.tool(named: "swiftlint")
 
         let packageConfig = configurationFile(at: context.package.directory)
-        var packageArguments = addConfiguration(packageConfig, to: arguments)
-        let packageEnvironment = addEnvironment(
-            arguments: &packageArguments,
-            files: [context.package.directory.appending("Package.swift").string]
-        )
-        try run(swiftlint, with: packageArguments, environment: packageEnvironment)
+        let packageArguments = arguments
+            .appending(configuration: packageConfig)
+            .appending(path: context.package.directory.appending("Package.swift"))
+        try swiftlint.run(with: packageArguments)
 
         for target in context.package.targets {
             guard let target = target as? SourceModuleTarget, targets.contains(target.name) else {
                 continue
             }
 
-            let configuration = configurationFile(at: target.directory) ?? packageConfig
-            var arguments = addConfiguration(configuration, to: arguments)
-            let environment = addEnvironment(
-                arguments: &arguments,
-                files: target.sourceFiles(withSuffix: "swift").map(\.path.string)
-            )
-            try run(swiftlint, with: arguments, environment: environment)
+            let arguments = arguments
+                .appending(configuration: configurationFile(at: target.directory) ?? packageConfig)
+                .appending(path: target.directory)
+            try swiftlint.run(with: arguments, for: target.name)
         }
     }
 }
 
 private extension SwiftLintCommand {
+    typealias Arguments = [String]
+
     func parse(
         arguments: [String],
         targets allTargets: @autoclosure () -> [String],
         cache: Path
-    ) -> (targets: [String], arguments: [String]) {
+    ) -> (targets: [String], arguments: Arguments) {
         var extractor = ArgumentExtractor(arguments)
         var targets = extractor.extractOption(named: "target")
         var arguments = extractor.remainingArguments
@@ -86,29 +83,27 @@ private extension SwiftLintCommand {
         }
         return path
     }
+}
 
-    func addConfiguration(_ configuration: Path?, to arguments: [String]) -> [String] {
-        arguments.contains("--config")
-            ? arguments
-            : arguments + ["--config", configuration?.string].compactMap { $0 }
+private extension SwiftLintCommand.Arguments {
+    func appending(configuration: Path?) -> SwiftLintCommand.Arguments {
+        contains("--config") ? self : self + ["--config", configuration?.string].compactMap { $0 }
     }
 
-    func addEnvironment(arguments: inout [String], files: @autoclosure () -> [String]) -> [String: String] {
-        var environment: [String: String] = [:]
-        if !arguments.contains("--use-script-input-files") {
-            arguments.append("--use-script-input-files")
-            let files = files()
-            environment["SCRIPT_INPUT_FILE_COUNT"] = String(files.count)
-            files.enumerated().forEach { (index, file) in
-                environment["SCRIPT_INPUT_FILE_\(index)"] = file
-            }
+    func appending(path: Path) -> SwiftLintCommand.Arguments {
+        self + [path.string]
+    }
+}
+
+private extension PluginContext.Tool {
+    func run(with arguments: [String], for targetName: String? = nil) throws {
+        var environment = [String: String]()
+        if let targetName {
+            environment["TARGET_NAME"] = targetName
         }
-        return environment
-    }
 
-    func run(_ exec: Path, with arguments: [String], environment: [String: String]) throws {
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: exec.string)
+        process.executableURL = URL(fileURLWithPath: path.string)
         process.arguments = arguments
         process.environment = environment
 
@@ -132,10 +127,12 @@ private extension SwiftLintCommand {
                 let severity = components[3].trimmingCharacters(in: .whitespaces)
                 switch severity {
                 case "warning":
-                    Diagnostics.warning(line, file: components[0], line: Int(components[1]))
+                    print(line)
+                    Diagnostics.warning(components[4], file: components[0], line: Int(components[1]))
                     continue
                 case "error":
-                    Diagnostics.error(line, file: components[0], line: Int(components[1]))
+                    print(line)
+                    Diagnostics.error(components[4], file: components[0], line: Int(components[1]))
                     continue
                 default:
                     break
@@ -156,21 +153,16 @@ extension SwiftLintCommand: XcodeCommandPlugin {
             targets: context.xcodeProject.targets.map(\.displayName),
             cache: context.pluginWorkDirectory
         )
-        let swiftlint = try context.tool(named: "swiftlint").path
+        let swiftlint = try context.tool(named: "swiftlint")
 
-        let configuration = configurationFile(at: context.xcodeProject.directory)
-        let args = addConfiguration(configuration, to: arguments)
+        let args = arguments.appending(configuration: configurationFile(at: context.xcodeProject.directory))
         for target in context.xcodeProject.targets {
             guard targets.contains(target.displayName) else {
                 continue
             }
 
-            var arguments = args
-            let environment = addEnvironment(
-                arguments: &arguments,
-                files: target.inputFiles.filter({ $0.path.extension == "swift" }).map(\.path.string)
-            )
-            try run(swiftlint, with: arguments, environment: environment)
+            let arguments = args.appending(path: context.xcodeProject.directory.appending(target.displayName))
+            try swiftlint.run(with: arguments, for: target.displayName)
         }
     }
 }

@@ -38,19 +38,25 @@ struct SwiftLintBuildTool: BuildToolPlugin {
         }
 
         let packageFile = context.package.directory.appending("Package.swift").string
-        let inputFiles = target.sourceFiles(withSuffix: "swift").map(\.path.string)
+        let tests = context.package.targets.compactMap {
+            $0.name.hasPrefix(target.name) && $0.name.contains("Tests") ? $0.directory.string : nil
+        }
+
+        var arguments = [
+            "lint",
+            "--cache-path", "\(context.pluginWorkDirectory)",
+            "--config", "\(configuration.string)",
+            packageFile,
+            target.directory.string
+        ]
+        arguments += tests
 
         return [
             .prebuildCommand(
                 displayName: "Run SwiftLint for \(target.name)",
                 executable: try context.tool(named: "swiftlint").path,
-                arguments: [
-                    "lint",
-                    "--cache-path", "\(context.pluginWorkDirectory)",
-                    "--config", "\(configuration.string)",
-                    "--use-script-input-files"
-                ],
-                environment: environment(files: [packageFile] + inputFiles),
+                arguments: arguments,
+                environment: ["TARGET_NAME": target.name],
                 outputFilesDirectory: context.pluginWorkDirectory
             )
         ]
@@ -62,15 +68,6 @@ private extension SwiftLintBuildTool {
         [target, project]
             .compactMap { $0?.appending("swiftlint.yml") }
             .first { FileManager.default.fileExists(atPath: $0.string) }
-    }
-
-    func environment(files: [String]) -> [String: String] {
-        var environment: [String: String] = [:]
-        environment["SCRIPT_INPUT_FILE_COUNT"] = String(files.count)
-        files.enumerated().forEach { (index, file) in
-            environment["SCRIPT_INPUT_FILE_\(index)"] = file
-        }
-        return environment
     }
 }
 
@@ -84,22 +81,28 @@ extension SwiftLintBuildTool: XcodeBuildToolPlugin {
             return []
         }
 
-        let inputFiles = context.xcodeProject.filePaths.filter({ $0.extension == "swift" }).map(\.string)
-        if inputFiles.isEmpty {
-            return []
+        let tests: [String] = context.xcodeProject.targets.compactMap {
+            let name = $0.displayName
+            guard name.hasPrefix(target.displayName), name.contains("Tests") else {
+                return nil
+            }
+            return context.xcodeProject.directory.appending(name).string
         }
+
+        var arguments = [
+            "lint",
+            "--cache-path", "\(context.pluginWorkDirectory)",
+            "--config", "\(configuration.string)",
+            context.xcodeProject.directory.appending(target.displayName).string
+        ]
+        arguments += tests
 
         return [
             .prebuildCommand(
                 displayName: "Run SwiftLint for \(target.displayName)",
                 executable: try context.tool(named: "swiftlint").path,
-                arguments: [
-                    "lint",
-                    "--cache-path", "\(context.pluginWorkDirectory)",
-                    "--config", "\(configuration.string)",
-                    "--use-script-input-files"
-                ],
-                environment: environment(files: inputFiles),
+                arguments: arguments,
+                environment: ["TARGET_NAME": target.displayName],
                 outputFilesDirectory: context.pluginWorkDirectory
             )
         ]
